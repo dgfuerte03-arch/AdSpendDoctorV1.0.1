@@ -1,0 +1,184 @@
+{
+  "app": {
+    "name": "AdSpend Doctor (Payment First)",
+    "type": "multi_step_prompt_flow",
+    "version": "1.0.1"
+  },
+  "settings": {
+    "tone": "calm, direct, no-hype",
+    "language": "en",
+    "ui": { "mobile_first": true, "max_width": "640px" }
+  },
+  "data_model": {
+    "fields": {
+      "business_type": {
+        "type": "enum",
+        "options": ["E-commerce", "Service", "Lead Gen", "Local Business", "Other"],
+        "required": true
+      },
+      "objective": {
+        "type": "enum",
+        "options": ["Sales", "Leads", "Traffic", "Messages", "Awareness", "Other"],
+        "required": true
+      },
+      "monthly_ad_spend": { "type": "number", "required": true, "min": 0 },
+      "timeframe_days": { "type": "number", "required": true, "min": 1, "max": 365 },
+      "ctr_all": { "type": "number", "required": true, "min": 0 },
+      "cost_per_result": { "type": "number", "required": true, "min": 0 },
+      "destination_type": {
+        "type": "enum",
+        "options": ["Landing Page", "Instant Form", "WhatsApp/Messages", "Shop", "Other"],
+        "required": true
+      },
+      "results": { "type": "number", "required": false, "min": 0 },
+
+      "is_paid": { "type": "boolean", "required": false },
+      "verdict_report": { "type": "string", "required": false }
+    }
+  },
+  "flow": {
+    "steps": [
+      {
+        "id": "welcome",
+        "type": "screen",
+        "title": "AdSpend Doctor",
+        "subtitle": "Pay once. Get a decisive Meta Ads verdict: Pause / Fix / Scale / Kill.",
+        "components": [
+          {
+            "type": "bullets",
+            "items": [
+              "Verdict-first (not an audit).",
+              "One primary failure point + what NOT to touch.",
+              "One Ads Manager-executable action for the next 72 hours + stop-loss."
+            ]
+          },
+          { "type": "cta", "label": "Continue", "action": { "type": "next" } }
+        ]
+      },
+      {
+        "id": "paywall",
+        "type": "screen",
+        "title": "Unlock the Verdict",
+        "subtitle": "Checkout first. Then enter your metrics.",
+        "components": [
+          {
+            "type": "bullets",
+            "items": [
+              "Eligibility: works best with 3–90 day data, spend > 0, and CPA/CPL > 0.",
+              "Full verdict report (copy/paste ready)",
+              "72-hour action you can execute inside Ads Manager",
+              "Stop-loss rule to protect spend",
+              "Refund if the verdict isn’t clear/useful."
+            ]
+          },
+          {
+            "type": "cta_row",
+            "buttons": [
+              {
+                "label": "Pay & Start",
+                "action": { "type": "go_to", "step_id": "payment" }
+              },
+              {
+                "label": "Not now",
+                "action": { "type": "go_to", "step_id": "exit" }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "payment",
+        "type": "payment",
+        "title": "Checkout",
+        "description": "Unlock the full verdict report.",
+        "pricing": { "currency": "AED", "amount": 99 },
+        "on_success": {
+          "set": { "is_paid": true },
+          "next": { "type": "go_to", "step_id": "inputs" }
+        },
+        "on_cancel": { "type": "go_to", "step_id": "exit" }
+      },
+      {
+        "id": "inputs",
+        "type": "form",
+        "title": "Your Inputs",
+        "subtitle": "Use Ads Manager totals for the selected timeframe (3–90 days).",
+        "fields": [
+          { "key": "business_type", "label": "Business type", "component": "select", "required": true },
+          { "key": "objective", "label": "Primary objective", "component": "select", "required": true },
+          {
+            "key": "monthly_ad_spend",
+            "label": "Monthly ad spend",
+            "component": "number",
+            "required": true,
+            "placeholder": "e.g., 5000 (must be > 0)"
+          },
+          {
+            "key": "timeframe_days",
+            "label": "Timeframe (days)",
+            "component": "number",
+            "required": true,
+            "placeholder": "e.g., 14 (must be 3–90)"
+          },
+          {
+            "key": "ctr_all",
+            "label": "CTR (All) %",
+            "component": "number",
+            "required": true,
+            "placeholder": "e.g., 1.2"
+          },
+          {
+            "key": "cost_per_result",
+            "label": "Cost per result (CPA / CPL)",
+            "component": "number",
+            "required": true,
+            "placeholder": "e.g., 35 (must be > 0)"
+          },
+          { "key": "destination_type", "label": "Destination", "component": "select", "required": true },
+          {
+            "key": "results",
+            "label": "Results in timeframe (optional: purchases/leads)",
+            "component": "number",
+            "required": false,
+            "placeholder": "e.g., 12"
+          }
+        ],
+        "actions": [{ "type": "next", "label": "Get My Verdict" }]
+      },
+      {
+        "id": "verdict_ai",
+        "type": "ai_call",
+        "title": "Generating full verdict…",
+        "model": { "provider": "openai", "name": "gpt-5.2" },
+        "prompt": {
+          "system": "You are a Meta Ads VERDICT ENGINE. You do not audit. You deliver a decisive verdict.\nAssume the user has paid for a decisive, operational answer. Be blunt but professional.\n\nNon-negotiables:\n- Be specific and decisive.\n- No buzzwords, no generic advice, no “algorithm” blame.\n- Use the user’s numbers.\n- Output MUST follow the exact sections and constraints.\n\nObjective Data Gate (do NOT invent thresholds):\n- monthly_ad_spend must be > 0\n- timeframe_days must be between 3 and 90 (inclusive)\n- ctr_all must be between 0 and 20 (inclusive)\n- cost_per_result must be > 0\nIf any gate fails, output ONLY:\nSECTION 1: VERDICT -> Not enough data.\nSECTION 2: WHAT’S MISSING -> list up to two items to fix (max 2).\nSECTION 3: NEXT STEP -> ask them to correct/provide those items.\nDo not provide any other advice.\n\nOperational Specificity Rule:\nIn SECTION 6, your action MUST be executable inside Meta Ads Manager and must name at least ONE concrete operation from this list:\n- Pause campaign/ad set/ad\n- Duplicate campaign/ad set\n- Launch X new creatives (state X)\n- Replace creative(s)\n- Exclude/stop a placement\n- Switch destination (Instant Form vs Landing Page vs WhatsApp)\n- Move budget from A to B (state A and B)\n- Consolidate ad sets\n- Set a new cost control/bid strategy (only if relevant)\nVague verbs like “optimize/improve/test” are forbidden unless immediately followed by exact steps above.",
+          "user": "User Inputs:\n- Business type: {{business_type}}\n- Objective: {{objective}}\n- Monthly ad spend: {{monthly_ad_spend}}\n- Timeframe (days): {{timeframe_days}}\n- CTR (All) %: {{ctr_all}}\n- Cost per result (CPA/CPL): {{cost_per_result}}\n- Destination type: {{destination_type}}\n- Results in timeframe (optional): {{results}}\n\nYou must produce the following output format (exactly):\n\nSECTION 1: VERDICT\nChoose ONE only:\n- Pause\n- Fix\n- Scale cautiously\n- Kill\nState it in one sentence.\n\nSECTION 2: PRIMARY FAILURE POINT\nChoose ONE only:\n- Creative\n- Offer\n- Audience / targeting\n- Funnel / destination\n- Tracking / measurement\n- Budget structure\n\nSECTION 3: WHY THIS IS THE FAILURE\nExplain in 2–3 sentences using the numbers provided. If results is provided, use it to judge stability.\n\nSECTION 4: HARD TRUTH\nOne uncomfortable truth. One sentence.\n\nSECTION 5: WHAT NOT TO TOUCH\nOne thing they should NOT change right now. One sentence.\n\nSECTION 6: NEXT 72 HOURS\nOne concrete Ads Manager-executable action only.\nAlso include a Stop Loss line inside this section in the format:\n\"STOP LOSS: If cost per result doesn’t improve by at least X% within 72 hours, then Y.\"\n(Choose X between 15–30% and a decisive Y like pause/duplicate/replace creatives.)\n\nSECTION 7: CONFIDENCE NOTE\nCalm, grounded, based on the numbers (no hype)."
+        },
+        "output": { "type": "text", "save_as": "verdict_report" },
+        "actions": [{ "type": "next", "label": "View Verdict" }]
+      },
+      {
+        "id": "results_paid",
+        "type": "screen",
+        "title": "Your Verdict",
+        "components": [
+          { "type": "markdown", "source": "{{verdict_report}}" },
+          {
+            "type": "cta_row",
+            "buttons": [
+              { "label": "Run again (new metrics)", "action": { "type": "go_to", "step_id": "inputs" } },
+              { "label": "Copy verdict", "action": { "type": "copy_to_clipboard", "value": "{{verdict_report}}" } }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "exit",
+        "type": "screen",
+        "title": "No problem",
+        "subtitle": "If you want the verdict later, you can restart anytime.",
+        "components": [{ "type": "cta", "label": "Restart", "action": { "type": "go_to", "step_id": "welcome" } }]
+      }
+    ]
+  }
+}
